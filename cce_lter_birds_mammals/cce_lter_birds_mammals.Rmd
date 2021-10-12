@@ -1,0 +1,224 @@
+---
+title: "CCE LTER Birds and Mammals"
+output:
+  learnr::tutorial:
+    progressive: true
+    allow_skip: true
+runtime: shiny_prerendered
+description: >
+  Introduction to R and some of its uses.
+---
+
+```{r setup, include=FALSE}
+
+# Load packages
+
+library(learnr)
+library(tidyverse)
+library(plotly)
+library(calecopal)
+
+# Load data
+
+calcofi_trans <- read_csv('CalCOFI_transect.csv')
+calcofi_obs <- read_csv('CalCOFI_obs.csv')
+
+nmfs_trans <- read_csv('NMFS_transect.csv')
+nmfs_obs <- read_csv('NMFS_obs.csv')
+
+cpr_trans <- read_csv('CPR_transect.csv')
+cpr_obs <- read_csv('CPR_obs.csv')
+
+species <- read_csv('species_codes.csv')
+behavior <- read_csv('behavior_codes.csv')
+
+# Wrangle data
+
+calcofi <- inner_join(calcofi_trans, calcofi_obs)
+nmfs <- inner_join(nmfs_trans, nmfs_obs)
+cpr <- inner_join(cpr_trans, cpr_obs)
+
+dat <- rbind(calcofi,nmfs) %>% 
+  rbind(., cpr) %>% 
+  left_join(species, by = c('Species'='code')) %>% 
+  left_join(behavior, by = c('Behavior'='code')) %>% 
+  mutate(date = lubridate::ymd(Date),
+         year = lubridate::year(date))%>% 
+  select(Cruise, Transect.number, Area, year, date, Season,
+         taxon, Species, species, Count, behavior) %>% 
+  rename(cruise = Cruise, transect = Transect.number, area = Area, season = Season,
+         species_code = Species, count = Count) %>% 
+  filter(!is.na(species)) %>% 
+  mutate(behavior = factor(behavior, levels=c('Feeding','On/inthewater',
+                                              'Inflight','Bow-riding',
+                                              'Shipattracted','Shipfollowing')))
+
+# Tutorial options:
+
+tutorial_options(exercise.timelimit = 10)
+
+```
+
+## Raw data
+
+These data are from the [CCE LTER](http://dx.doi.org/10.6073/pasta/0994b34ec9ce56b82d7b00bac995975c), showing bird and mammal counts from cruise transects.
+
+*Farallon Institute Advanced Ecosystem Research, CalCOFI - Scripps Institution of Oceanography, California Current Ecosystem LTER, and B. Sydeman. 2017. Bird and mammal observations aboard CalCOFI (1987-2015, ongoing), NMFS (1996-2015, ongoing) and CPR (2003-2006, completed) cruises. ver 2. Environmental Data Initiative.*
+
+```{r data, exercise=TRUE}
+
+# Display first 10 rows of data
+head(dat, 10)
+
+```
+
+## Species list
+
+### Mammals
+
+```{r mammal-species, exercise=TRUE}
+
+mammals <- dat %>% 
+  filter(taxon=='mammal')
+
+unique(mammals$species)
+
+```
+
+### Birds
+
+```{r bird-species, exercise=TRUE}
+
+birds <- dat %>% 
+  filter(taxon=='bird')
+
+unique(birds$species)
+
+```
+
+## Behavior
+
+### Mammals
+
+```{r mammal-behavior, exercise=TRUE, fig.width=8, fig.height=4}
+
+# Mammals
+
+mammal_behavior <- dat %>% 
+  filter(taxon=='mammal',
+         !is.na(behavior),
+         (behavior!='Inflight'))
+
+cols <- cal_palette('kelp1', n = 6, type = 'continuous')
+names(cols) <- levels(behavior$behavior)
+
+mammal_behavior %>% 
+  group_by(year, behavior) %>% 
+  summarise(total_count = sum(count)) %>%
+  group_by(year) %>% 
+  mutate(n = sum(total_count)) %>% 
+  ggplot(aes(x = year, y = total_count, fill = behavior)) +
+  geom_bar(position = 'fill', stat = 'identity') +
+  scale_fill_manual(name = 'Behavior', values = cols) +
+  geom_text(aes(x = year, y = 1.07, label = n),
+            angle = 90) +
+  theme_minimal() +
+  theme(axis.text.y = element_blank()) +
+  scale_x_continuous(breaks = c(1990,1995,2000,2005,2010,2015)) +
+  scale_y_continuous(expand = c(0,0.09)) +
+  labs(x = 'Year', y = 'Proportion of Observations',
+       title = 'Mammal Behavior Observations (1987-2015)')
+
+```
+
+### Birds
+
+```{r bird-behavior, exercise=TRUE, fig.width=8, fig.height=4}
+
+# Birds
+
+bird_behavior <- dat %>% 
+  filter(taxon=='bird',
+         !is.na(behavior),
+         behavior!='Bow-riding')
+
+cols <- cal_palette('kelp1', n = 6, type = 'continuous')
+names(cols) <- levels(behavior$behavior)
+
+bird_behavior %>% 
+  group_by(year, behavior) %>% 
+  summarise(total_count = sum(count)) %>%
+  group_by(year) %>% 
+  mutate(n = sum(total_count)) %>% 
+  ggplot(aes(x = year, y = total_count, fill = behavior)) +
+  geom_bar(position = 'fill', stat = 'identity') +
+  scale_fill_manual(name = 'Behavior', values = cols) +
+  geom_text(aes(x = year, y = 1.10, label = n),
+            angle = 90) +
+  theme_minimal() +
+  theme(axis.text.y = element_blank()) +
+  scale_x_continuous(breaks = c(1990,1995,2000,2005,2010,2015)) +
+  scale_y_continuous(expand = c(0,0.13)) +
+  labs(x = 'Year', y = 'Proportion of Observations',
+       title = 'Bird Behavior Observations (1987-2015)')
+
+```
+
+
+
+```{r eval=FALSE, include=FALSE}
+
+library(plotly)
+
+channel <- read_csv('channel_islands.csv') %>% 
+  mutate(date = lubridate::ymd(time),
+         year = lubridate::year(date))
+
+
+
+plot_ly(mtcars,
+        x = ~wt, y = ~hp, z = ~qsec,
+        color = ~am, colors = c('#BF382A', '#0C4B8E')) %>%
+  add_markers()%>%
+  layout(scene = list(xaxis = list(title = 'Weight'),
+                     yaxis = list(title = 'Gross horsepower'),
+                     zaxis = list(title = '1/4 mile time')))
+
+cols <- cal_palette('kelp1', n = 17, type = 'continuous')
+
+plot_ly(channel,
+        x = ~date, y = ~depth, z = ~size,
+        color = ~species_name,
+        colors = cols) %>% 
+  add_markers()
+
+        , colors = colors,
+             marker = list(symbol = 'circle', sizemode = 'diameter'), sizes = c(5, 150),
+             text = ~paste('Country:', country, '<br>Life Expectancy:', lifeExp, '<br>GDP:', gdpPercap,
+                           '<br>Pop.:', pop))
+fig <- fig %>% layout(title = 'Life Expectancy v. Per Capita GDP, 2007',
+         scene = list(xaxis = list(title = 'GDP per capita (2000 dollars)',
+                      gridcolor = 'rgb(255, 255, 255)',
+                      range = c(2.003297660701705, 5.191505530708712),
+                      type = 'log',
+                      zerolinewidth = 1,
+                      ticklen = 5,
+                      gridwidth = 2),
+               yaxis = list(title = 'Life Expectancy (years)',
+                      gridcolor = 'rgb(255, 255, 255)',
+                      range = c(36.12621671352166, 91.72921793264332),
+                      zerolinewidth = 1,
+                      ticklen = 5,
+                      gridwith = 2),
+               zaxis = list(title = 'Population',
+                            gridcolor = 'rgb(255, 255, 255)',
+                            type = 'log',
+                            zerolinewidth = 1,
+                            ticklen = 5,
+                            gridwith = 2)),
+         paper_bgcolor = 'rgb(243, 243, 243)',
+         plot_bgcolor = 'rgb(243, 243, 243)')
+
+```
+
+
